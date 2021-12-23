@@ -1,0 +1,137 @@
+---
+title: "Sophie's GTA iNaturalist Sightings"
+subtitle: "iNaturalist, December 2021"
+output:
+  flexdashboard::flex_dashboard:
+    storyboard: true
+---
+
+```{r setup, include=FALSE}
+# download data from iNat: https://www.inaturalist.org/observations/export
+
+library(ggplot2)
+library(dplyr)
+library(flexdashboard)
+library(here)
+library(leaflet)
+library(tidyr)
+
+
+inat <- read.csv(here::here("./data/inaturalist_data_breitbart_20211223.csv"),
+                 header=T, na.strings=c("","NA")) %>%
+  drop_na(taxon_kingdom_name, latitude, longitude)
+
+```
+
+Geographic Map
+===================================== 
+
+```{r}
+# Create a palette that maps factor levels to colors
+pal <- colorFactor(palette = 'Dark2',
+                   domain = inat$taxon_kingdom_name)
+
+
+leaflet(inat) %>% 
+  addTiles(options = providerTileOptions(opacity = 0.55)) %>%
+  # addProviderTiles(providers$CartoDB.Positron,
+  #                  options = providerTileOptions(opacity = 0.55)) %>%
+  fitBounds(-79.6,44,-79.2,43.5) %>% 
+  addCircles(lng = ~longitude,
+             lat = ~latitude,
+             radius = 2,
+             popup = paste("Scientific name: ",
+                           # italicize
+                           "<i>",
+                           inat$scientific_name,
+                           "</i>",
+                           ". ",
+                           "<br>", # line break
+                           "Common name: ",
+                           inat$common_name, 
+                           ". ",
+                           # create hyperlink
+                           "<a href='",
+                           inat$url,
+                           "'>",
+                           inat$url,
+                           "</a>"),
+             fill = T,
+             fillOpacity = 0.8,
+             color = ~pal(taxon_kingdom_name)) %>%
+  addLegend("bottomleft", 
+            pal = pal,
+            values = inat$taxon_kingdom_name,
+            opacity = 0.8)
+```
+
+Taxonomy Treemap
+===================================== 
+
+```{r}
+library(treemap)
+library(d3treeR)
+library(treemapify)
+
+
+inat_sum <- inat %>%
+  dplyr::mutate(taxon_kingdom_name = as.factor(taxon_kingdom_name),
+                taxon_phylum_name = as.factor(taxon_phylum_name),
+                taxon_class_name = as.factor(taxon_class_name),
+                taxon_order_name = as.factor(taxon_order_name),
+                ) %>%
+  dplyr::group_by(taxon_kingdom_name,
+                  taxon_phylum_name,
+                  taxon_class_name,
+                  taxon_order_name) %>%
+  dplyr::summarise(count = n())
+
+treemap(inat_sum,
+          index=c("taxon_kingdom_name",
+                    "taxon_phylum_name",
+                    "taxon_class_name"
+                    # ,
+                    # "taxon_order_name"
+                    ),
+        # title.legend = "legend title",
+        vSize="count",
+        vColor = "taxon_kingdom_name"
+            # type="index",
+        #     palette = "HCL",
+        #     border.col=c("black", "grey", "grey"),            
+        #     border.lwds=c(1,0.5,0.1),  
+        #     title="Taxa Observed",
+        #     fontface.labels= 3,
+        # inflate.labels = T,
+        # align.labels=list(
+        # c("center", "top"),
+        # c("center", "center"),
+        # c("center", "bottom")
+        # ),
+        
+)
+
+
+ggplot(inat_sum, aes(area = count,
+                     fill = taxon_kingdom_name,
+                     label = taxon_phylum_name,
+                subgroup = taxon_kingdom_name)) +
+  # 1. Draw type_2 borders and fill colors
+  geom_treemap() +
+  # 2. Draw type_1 borders
+  geom_treemap_subgroup_border() +
+  # 3. Print type_1 text
+  geom_treemap_subgroup_text(place = "centre", grow = T, alpha = 0.5, colour = "black",
+                             fontface = "italic", min.size = 0) +
+  # 4. Print type_2 text
+  geom_treemap_text(colour = "white", place = "topleft", reflow = T) +
+  theme(legend.position = 0)
+```
+
+Page 3
+===================================== 
+
+```{r}
+# d3tree(map1, rootname = "Kingdom" )
+
+```
