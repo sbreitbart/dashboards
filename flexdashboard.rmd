@@ -72,9 +72,10 @@ Taxonomy Treemap
 library(treemap)
 library(d3treeR)
 library(treemapify)
+library(ggplot2)
 
 
-inat_sum <- inat %>%
+inat_tree <- inat %>%
   dplyr::mutate(taxon_kingdom_name = as.factor(taxon_kingdom_name),
                 taxon_phylum_name = as.factor(taxon_phylum_name),
                 taxon_class_name = as.factor(taxon_class_name),
@@ -86,35 +87,35 @@ inat_sum <- inat %>%
                   taxon_order_name) %>%
   dplyr::summarise(count = n())
 
-treemap(inat_sum,
-          index=c("taxon_kingdom_name",
-                    "taxon_phylum_name",
-                    "taxon_class_name"
-                    # ,
-                    # "taxon_order_name"
-                    ),
-        # title.legend = "legend title",
-        vSize="count",
-        vColor = "taxon_kingdom_name"
-            # type="index",
-        #     palette = "HCL",
-        #     border.col=c("black", "grey", "grey"),            
-        #     border.lwds=c(1,0.5,0.1),  
-        #     title="Taxa Observed",
-        #     fontface.labels= 3,
-        # inflate.labels = T,
-        # align.labels=list(
-        # c("center", "top"),
-        # c("center", "center"),
-        # c("center", "bottom")
-        # ),
-        
-)
+# treemap(inat_tree,
+#           index=c("taxon_kingdom_name",
+#                     "taxon_phylum_name",
+#                     "taxon_class_name"
+#                     # ,
+#                     # "taxon_order_name"
+#                     ),
+#         # title.legend = "legend title",
+#         vSize="count",
+#         vColor = "taxon_kingdom_name"
+#             # type="index",
+#         #     palette = "HCL",
+#         #     border.col=c("black", "grey", "grey"),            
+#         #     border.lwds=c(1,0.5,0.1),  
+#         #     title="Taxa Observed",
+#         #     fontface.labels= 3,
+#         # inflate.labels = T,
+#         # align.labels=list(
+#         # c("center", "top"),
+#         # c("center", "center"),
+#         # c("center", "bottom")
+#         # ),
+#         
+# )
 
 
-ggplot(inat_sum, aes(area = count,
+ggplot(inat_tree, aes(area = count,
                      fill = taxon_kingdom_name,
-                     label = taxon_phylum_name,
+                     label = taxon_order_name,
                 subgroup = taxon_kingdom_name)) +
   # 1. Draw type_2 borders and fill colors
   geom_treemap() +
@@ -131,7 +132,95 @@ ggplot(inat_sum, aes(area = count,
 Page 3
 ===================================== 
 
-```{r}
-# d3tree(map1, rootname = "Kingdom" )
+```{r fig.show = 'animate'}
 
+months1 <- seq(as.Date("2019/6/1"), by = "month", length.out = 28)
+
+iconic_taxon_name <- unique(inat$iconic_taxon_name)
+
+test1 <- data.frame(crossing(months1, iconic_taxon_name))
+
+inat_time <- inat %>%
+  tidyr::drop_na(observed_on, iconic_taxon_name) %>%
+  # dplyr::mutate(month = substr(observed_on, 1, 7)) %>%
+  ungroup() %>% 
+  dplyr::mutate(observed_on = as.Date(observed_on)) %>%
+    dplyr::group_by(iconic_taxon_name, observed_on) %>%
+  dplyr::summarise(count = n()) %>%
+  dplyr::mutate(months1 = lubridate::floor_date(observed_on, "month")) %>%
+  full_join(test1, by = c("months1", "iconic_taxon_name")) %>%
+  dplyr::mutate(count = ifelse(is.na(count), 0, count))
+
+
+# all taxa
+# ggplot(inat_time,
+#        aes(x = months1,
+#            y = count)) +
+#   geom_smooth(aes(color = iconic_taxon_name),
+#               se = F) +
+#   theme_classic()
+
+# # all taxa: ridgelines
+# ggplot(inat_time,
+#        aes(x = months1,
+#            y = iconic_taxon_name,
+#            fill = iconic_taxon_name)) +
+#    geom_density_ridges() +
+#   labs(x = "Date",
+#        y = "Monthly Observations",
+#        color = "Taxonomic Group") +
+#   theme_classic() 
+
+
+
+# find 5 most popular taxa by total count
+inat_time %>%
+  dplyr::group_by(iconic_taxon_name) %>%
+  dplyr::summarise(total_counts = sum(count)) %>%
+  top_n(5)
+
+# just top 5 most popular taxa
+gif <- ggplot(inat_time %>%
+         filter(iconic_taxon_name %in%
+                  c("Arachnida", "Aves", "Fungi", "Insecta", "Plantae")),
+       aes(x = months1,
+           y = count)) +
+  geom_smooth(aes(color = iconic_taxon_name),
+              se = F) +
+  theme_classic()+ 
+  geom_point(aes(color = iconic_taxon_name)) +
+  labs(y = "Monthly Observations",
+       color = "Taxonomic Group") +
+  gganimate::transition_states(iconic_taxon_name,
+                    transition_length = 8,
+                    state_length = 12) + 
+  ggtitle('Now showing {closest_state}') + 
+  gganimate::enter_fade() + 
+  gganimate::exit_shrink()
+
+gganimate::anim_save("plot3.gif", gif)
+
+# # density plot
+# ggplot(inat_time %>%
+#          filter(iconic_taxon_name %in%
+#                   c("Arachnida", "Aves", "Fungi", "Insecta", "Plantae")),
+#        aes(x = months1)) +
+#   geom_density(aes(color = iconic_taxon_name,
+#                    fill = iconic_taxon_name),
+#                alpha = 0.28) +
+#   theme_classic()
+
+# 
+# # just top 5 most popular taxa: ridgelines
+# ggplot(inat_time %>%
+#          filter(iconic_taxon_name %in%
+#                   c("Arachnida", "Aves", "Fungi", "Insecta", "Plantae")),
+#        aes(x = months1,
+#            y = iconic_taxon_name,
+#            fill = iconic_taxon_name)) +
+#    geom_density_ridges() +
+#   labs(x = "Date",
+#        y = "Monthly Observations",
+#        color = "Taxonomic Group") +
+#   theme_classic() 
 ```
