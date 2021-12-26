@@ -4,6 +4,11 @@ subtitle: "iNaturalist, December 2021"
 output:
   flexdashboard::flex_dashboard:
     storyboard: true
+    theme: 
+      version: 4
+      bootswatch: sketchy
+runtime: shiny
+  
 ---
 
 ```{r setup, include=FALSE}
@@ -25,6 +30,11 @@ inat <- read.csv(here::here("./data/inaturalist_data_breitbart_20211223.csv"),
 
 Geographic Map
 ===================================== 
+
+Dashboard by Sophie Breitbart, 2021
+[www.sbreitbart.github.io](www.sbreitbart.github.io)
+
+Zoom in, zoom out, and click points to check out the different species I've seen throughout the Greater Toronto Area. The diversity of life in downtown Toronto may surprise you!
 
 ```{r}
 # Create a palette that maps factor levels to colors
@@ -65,8 +75,15 @@ leaflet(inat) %>%
             opacity = 0.8)
 ```
 
+
+
 Taxonomy Treemap
 ===================================== 
+
+Dashboard by Sophie Breitbart, 2021
+[www.sbreitbart.github.io](www.sbreitbart.github.io)
+
+This treemap produces blocks that are proportional to the number of species I have observed in multiple taxonomic groups. The four largest blocks symbolize the most foundational hierarchical level: Kingdom (ex. plants, animals, fungi, protozoa- the purple blocks). The smallest blocks within kingdoms represent an intermediary level: Order (in plants, for example, we have *Brassicales*, *Saxifragales*, etc.).
 
 ```{r}
 library(treemap)
@@ -129,10 +146,15 @@ ggplot(inat_tree, aes(area = count,
   theme(legend.position = 0)
 ```
 
-Page 3
+Monthly Observations
 ===================================== 
 
-```{r fig.show = 'animate'}
+Dashboard by Sophie Breitbart, 2021
+[www.sbreitbart.github.io](www.sbreitbart.github.io)
+
+Use the interactive button on the left to view monthly patterns in taxon-specific groups that iNaturalist has identified as "iconic taxa", such as *Arachnida* (spiders), *Aves* (birds), *Fungi* (fungi), and *Insecta* (insects).
+
+```{r include = FALSE}
 
 months1 <- seq(as.Date("2019/6/1"), by = "month", length.out = 28)
 
@@ -180,6 +202,7 @@ inat_time %>%
   top_n(5)
 
 # just top 5 most popular taxa
+## FLEXDASHBOARD CAN'T DO GIFS/ANIMATIONS SO i'LL SAVE THIS FOR A FUTURE SHINY DASHBOARD
 gif <- ggplot(inat_time %>%
          filter(iconic_taxon_name %in%
                   c("Arachnida", "Aves", "Fungi", "Insecta", "Plantae")),
@@ -223,4 +246,34 @@ gganimate::anim_save("plot3.gif", gif)
 #        y = "Monthly Observations",
 #        color = "Taxonomic Group") +
 #   theme_classic() 
+```
+
+Column {.sidebar}
+--------------------------------------------------------------
+
+```{r}
+selectInput("iconic_taxon_name",
+            label = "Taxonomic Group:",
+            choices = c("Plantae", "Insecta", "Arachnida", "Aves", "Actinopterygii", "Fungi", "Protozoa", "Mollusca", "Mammalia", "Reptilia", "Amphibia"),
+            selected = "Plantae")
+
+```
+
+Column
+--------------------------------------------------------------
+
+```{r}
+renderPlot({
+  ggplot(inat_time %>%
+           dplyr::filter(iconic_taxon_name == input$iconic_taxon_name),
+       aes(x = months1,
+           y = count)) +
+  geom_smooth(aes(color = input$iconic_taxon_name),
+              se = F) +
+  theme_classic()+ 
+  geom_point(aes(color = input$iconic_taxon_name)) +
+  labs(x = "Month",
+       y = "Monthly Observations",
+       color = "Taxonomic Group")
+})
 ```
