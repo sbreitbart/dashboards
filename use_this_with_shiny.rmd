@@ -1,0 +1,279 @@
+---
+title: "Sophie's GTA iNaturalist Sightings"
+subtitle: "iNaturalist, December 2021"
+output:
+  flexdashboard::flex_dashboard:
+    storyboard: true
+    theme: 
+      version: 4
+      bootswatch: sketchy
+runtime: shiny
+  
+---
+
+```{r setup, include=FALSE}
+# download data from iNat: https://www.inaturalist.org/observations/export
+
+library(ggplot2)
+library(dplyr)
+library(flexdashboard)
+library(here)
+library(leaflet)
+library(tidyr)
+
+
+inat <- read.csv(here::here("./data/inaturalist_data_breitbart_20211223.csv"),
+                 header=T, na.strings=c("","NA")) %>%
+  drop_na(taxon_kingdom_name, latitude, longitude)
+
+```
+
+Geographic Map
+===================================== 
+
+Dashboard by Sophie Breitbart, 2021
+[www.sbreitbart.github.io](www.sbreitbart.github.io)
+
+Zoom in, zoom out, and click points to check out the different species I've seen throughout the Greater Toronto Area. The diversity of life in downtown Toronto may surprise you!
+
+```{r}
+# Create a palette that maps factor levels to colors
+pal <- colorFactor(palette = 'Dark2',
+                   domain = inat$taxon_kingdom_name)
+
+
+leaflet(inat) %>% 
+  addTiles(options = providerTileOptions(opacity = 0.55)) %>%
+  # addProviderTiles(providers$CartoDB.Positron,
+  #                  options = providerTileOptions(opacity = 0.55)) %>%
+  fitBounds(-79.6,44,-79.2,43.5) %>% 
+  addCircles(lng = ~longitude,
+             lat = ~latitude,
+             radius = 2,
+             popup = paste("Scientific name: ",
+                           # italicize
+                           "<i>",
+                           inat$scientific_name,
+                           "</i>",
+                           ". ",
+                           "<br>", # line break
+                           "Common name: ",
+                           inat$common_name, 
+                           ". ",
+                           # create hyperlink
+                           "<a href='",
+                           inat$url,
+                           "'>",
+                           inat$url,
+                           "</a>"),
+             fill = T,
+             fillOpacity = 0.8,
+             color = ~pal(taxon_kingdom_name)) %>%
+  addLegend("bottomleft", 
+            pal = pal,
+            values = inat$taxon_kingdom_name,
+            opacity = 0.8)
+```
+
+
+
+Taxonomy Treemap
+===================================== 
+
+Dashboard by Sophie Breitbart, 2021
+[www.sbreitbart.github.io](www.sbreitbart.github.io)
+
+This treemap produces blocks that are proportional to the number of species I have observed in multiple taxonomic groups. The four largest blocks symbolize the most foundational hierarchical level: Kingdom (ex. plants, animals, fungi, protozoa- the purple blocks). The smallest blocks within kingdoms represent an intermediary level: Order (in plants, for example, we have *Brassicales*, *Saxifragales*, etc.).
+
+```{r}
+library(treemap)
+library(d3treeR)
+library(treemapify)
+library(ggplot2)
+
+
+inat_tree <- inat %>%
+  dplyr::mutate(taxon_kingdom_name = as.factor(taxon_kingdom_name),
+                taxon_phylum_name = as.factor(taxon_phylum_name),
+                taxon_class_name = as.factor(taxon_class_name),
+                taxon_order_name = as.factor(taxon_order_name),
+                ) %>%
+  dplyr::group_by(taxon_kingdom_name,
+                  taxon_phylum_name,
+                  taxon_class_name,
+                  taxon_order_name) %>%
+  dplyr::summarise(count = n())
+
+# treemap(inat_tree,
+#           index=c("taxon_kingdom_name",
+#                     "taxon_phylum_name",
+#                     "taxon_class_name"
+#                     # ,
+#                     # "taxon_order_name"
+#                     ),
+#         # title.legend = "legend title",
+#         vSize="count",
+#         vColor = "taxon_kingdom_name"
+#             # type="index",
+#         #     palette = "HCL",
+#         #     border.col=c("black", "grey", "grey"),            
+#         #     border.lwds=c(1,0.5,0.1),  
+#         #     title="Taxa Observed",
+#         #     fontface.labels= 3,
+#         # inflate.labels = T,
+#         # align.labels=list(
+#         # c("center", "top"),
+#         # c("center", "center"),
+#         # c("center", "bottom")
+#         # ),
+#         
+# )
+
+
+ggplot(inat_tree, aes(area = count,
+                     fill = taxon_kingdom_name,
+                     label = taxon_order_name,
+                subgroup = taxon_kingdom_name)) +
+  # 1. Draw type_2 borders and fill colors
+  geom_treemap() +
+  # 2. Draw type_1 borders
+  geom_treemap_subgroup_border() +
+  # 3. Print type_1 text
+  geom_treemap_subgroup_text(place = "centre", grow = T, alpha = 0.5, colour = "black",
+                             fontface = "italic", min.size = 0) +
+  # 4. Print type_2 text
+  geom_treemap_text(colour = "white", place = "topleft", reflow = T) +
+  theme(legend.position = 0)
+```
+
+Monthly Observations
+===================================== 
+
+Dashboard by Sophie Breitbart, 2021
+[www.sbreitbart.github.io](www.sbreitbart.github.io)
+
+Use the interactive button on the left to view monthly patterns in taxon-specific groups that iNaturalist has identified as "iconic taxa", such as *Arachnida* (spiders), *Aves* (birds), *Fungi* (fungi), and *Insecta* (insects).
+
+```{r include = FALSE}
+
+months1 <- seq(as.Date("2019/6/1"), by = "month", length.out = 28)
+
+iconic_taxon_name <- unique(inat$iconic_taxon_name)
+
+test1 <- data.frame(crossing(months1, iconic_taxon_name))
+
+inat_time <- inat %>%
+  tidyr::drop_na(observed_on, iconic_taxon_name) %>%
+  # dplyr::mutate(month = substr(observed_on, 1, 7)) %>%
+  ungroup() %>% 
+  dplyr::mutate(observed_on = as.Date(observed_on)) %>%
+    dplyr::group_by(iconic_taxon_name, observed_on) %>%
+  dplyr::summarise(count = n()) %>%
+  dplyr::mutate(months1 = lubridate::floor_date(observed_on, "month")) %>%
+  full_join(test1, by = c("months1", "iconic_taxon_name")) %>%
+  dplyr::mutate(count = ifelse(is.na(count), 0, count))
+
+
+# all taxa
+# ggplot(inat_time,
+#        aes(x = months1,
+#            y = count)) +
+#   geom_smooth(aes(color = iconic_taxon_name),
+#               se = F) +
+#   theme_classic()
+
+# # all taxa: ridgelines
+# ggplot(inat_time,
+#        aes(x = months1,
+#            y = iconic_taxon_name,
+#            fill = iconic_taxon_name)) +
+#    geom_density_ridges() +
+#   labs(x = "Date",
+#        y = "Monthly Observations",
+#        color = "Taxonomic Group") +
+#   theme_classic() 
+
+
+
+# find 5 most popular taxa by total count
+inat_time %>%
+  dplyr::group_by(iconic_taxon_name) %>%
+  dplyr::summarise(total_counts = sum(count)) %>%
+  top_n(5)
+
+# just top 5 most popular taxa
+## FLEXDASHBOARD CAN'T DO GIFS/ANIMATIONS SO i'LL SAVE THIS FOR A FUTURE SHINY DASHBOARD
+gif <- ggplot(inat_time %>%
+         filter(iconic_taxon_name %in%
+                  c("Arachnida", "Aves", "Fungi", "Insecta", "Plantae")),
+       aes(x = months1,
+           y = count)) +
+  geom_smooth(aes(color = iconic_taxon_name),
+              se = F) +
+  theme_classic()+ 
+  geom_point(aes(color = iconic_taxon_name)) +
+  labs(y = "Monthly Observations",
+       color = "Taxonomic Group") +
+  gganimate::transition_states(iconic_taxon_name,
+                    transition_length = 8,
+                    state_length = 12) + 
+  ggtitle('Now showing {closest_state}') + 
+  gganimate::enter_fade() + 
+  gganimate::exit_shrink()
+
+gganimate::anim_save("plot3.gif", gif)
+
+# # density plot
+# ggplot(inat_time %>%
+#          filter(iconic_taxon_name %in%
+#                   c("Arachnida", "Aves", "Fungi", "Insecta", "Plantae")),
+#        aes(x = months1)) +
+#   geom_density(aes(color = iconic_taxon_name,
+#                    fill = iconic_taxon_name),
+#                alpha = 0.28) +
+#   theme_classic()
+
+# 
+# # just top 5 most popular taxa: ridgelines
+# ggplot(inat_time %>%
+#          filter(iconic_taxon_name %in%
+#                   c("Arachnida", "Aves", "Fungi", "Insecta", "Plantae")),
+#        aes(x = months1,
+#            y = iconic_taxon_name,
+#            fill = iconic_taxon_name)) +
+#    geom_density_ridges() +
+#   labs(x = "Date",
+#        y = "Monthly Observations",
+#        color = "Taxonomic Group") +
+#   theme_classic() 
+```
+
+Column {.sidebar}
+--------------------------------------------------------------
+
+```{r}
+selectInput("iconic_taxon_name",
+            label = "Taxonomic Group:",
+            choices = c("Plantae", "Insecta", "Arachnida", "Aves", "Actinopterygii", "Fungi", "Protozoa", "Mollusca", "Mammalia", "Reptilia", "Amphibia"),
+            selected = "Plantae")
+
+```
+
+Column
+--------------------------------------------------------------
+
+```{r}
+renderPlot({
+  ggplot(inat_time %>%
+           dplyr::filter(iconic_taxon_name == input$iconic_taxon_name),
+       aes(x = months1,
+           y = count)) +
+  geom_smooth(aes(color = input$iconic_taxon_name),
+              se = F) +
+  theme_classic()+ 
+  geom_point(aes(color = input$iconic_taxon_name)) +
+  labs(x = "Month",
+       y = "Monthly Observations",
+       color = "Taxonomic Group")
+})
+```
