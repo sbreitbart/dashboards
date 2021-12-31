@@ -171,7 +171,8 @@ inat_time <- inat %>%
   dplyr::summarise(count = n()) %>%
   dplyr::mutate(months1 = lubridate::floor_date(observed_on, "month")) %>%
   full_join(test1, by = c("months1", "iconic_taxon_name")) %>%
-  dplyr::mutate(count = ifelse(is.na(count), 0, count))
+  dplyr::mutate(count = ifelse(is.na(count), 0, count)) %>%
+  as.data.frame()
 
 
 # all taxa
@@ -248,17 +249,34 @@ gganimate::anim_save("plot3.gif", gif)
 #   theme_classic() 
 ```
 
-```{r}
-ggplot(inat_time,
-       aes(x = months1,
+```{r, fig.height = 4, fig.width = 13}
+ggplot(inat_time %>%
+         filter(iconic_taxon_name %in% c("Actinopterygii", "Amphibia", "Animalia", "Mammalia", "Protozoa", "Reptilia") == F),
+       aes(x = months1
+             # format(months1, "%b %Y")
+                    ,
            y = count)) +
   geom_smooth(aes(color = iconic_taxon_name),
               se = F) +
-  theme_classic()+ 
-  geom_point(aes(color = iconic_taxon_name)) +
-  labs(x = "Month",
+  theme_bw()+ 
+  geom_point(aes(color = iconic_taxon_name),
+             size = 1) +
+  labs(x = "Date",
        y = "Monthly Observations",
-       color = "Taxonomic Group")
+       color = "Taxonomic Group") +
+  facet_wrap(facets = vars(iconic_taxon_name),
+             nrow = 1) +
+  theme(legend.position = "none",
+        text = element_text(family = "Trebuchet MS"),
+        strip.text = element_text(size = 11),
+        axis.text = element_text(size = 11),
+        axis.title = element_text(size = 11),
+        axis.text.x = element_text(angle = 30, vjust = 0.9, hjust = 0.9)
+        ) +
+  scale_y_continuous(breaks = c(0,2,4,6,8,10, 12),
+                     limits = c(0, 10)) 
+# +   scale_x_date(date_breaks = "6 month")
+
 ```
 
 ***
